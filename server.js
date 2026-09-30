@@ -43,7 +43,17 @@ app.post('/upload', (req, res) => {
         res.status(200).send('Captura salva.');
     });
 });
+// Rota para listar todas as fotos
+app.get('/photos', (req, res) => {
+    const files = fs.readdirSync(uploadDir);
+    res.json(files);
+});
 
+// Rota para baixar uma foto específica
+app.get('/photos/:filename', (req, res) => {
+    const filePath = path.join(uploadDir, req.params.filename);
+    res.sendFile(filePath);
+});
 app.listen(PORT, () => {
     console.log(`Servidor rodando na porta ${PORT}`);
     console.log(`As fotos aparecerão na pasta /captures`);
